@@ -53,8 +53,8 @@ public:
   void init(double size, double cell_size) {
     cell_size_ = cell_size;
 
-    num_cells_x_ = static_cast<int>(std::ceil(size / cell_size_));
-    num_cells_y_ = static_cast<int>(std::ceil(size / cell_size_));
+    num_cells_x_ = std::ceil(size / cell_size_);
+    num_cells_y_ = std::ceil(size / cell_size_);
 
     total_cells_ = num_cells_x_ * num_cells_y_;
 
@@ -65,13 +65,13 @@ public:
   }
 
   void build_locals(particle_t *particles, int num_particles) {
-    if (data_.size() != (size_t)num_particles) {
+    if (data_.size() != num_particles) {
       data_.resize(num_particles);
     }
 
     std::fill(count_.begin(), count_.end(), 0);
     for (int i = 0; i < num_particles; ++i) {
-      int c = cell_id_of(particles[i].x, particles[i].y);
+      int c = get_cell_id(particles[i].x, particles[i].y);
       count_[c] += 1;
     }
 
@@ -85,7 +85,7 @@ public:
     }
 
     for (int i = 0; i < num_particles; ++i) {
-      int c = cell_id_of(particles[i].x, particles[i].y);
+      int c = get_cell_id(particles[i].x, particles[i].y);
       int pos = back_ptrs_[c];
       back_ptrs_[c] += 1;
       data_[pos] = i;
@@ -101,9 +101,9 @@ public:
   int end(int cell) const { return offset_[cell + 1]; }
   int particle_at(int k) const { return data_[k]; }
 
-  int cell_id_of(double x, double y) const {
-    int cx = static_cast<int>(x / cell_size_);
-    int cy = static_cast<int>(y / cell_size_);
+  int get_cell_id(double x, double y) const {
+    int cx = x / cell_size_;
+    int cy = y / cell_size_;
 
     if (cx < 0) {
       cx = 0;
@@ -157,63 +157,43 @@ static inline void add_ghost_targets(int cx, int cy, uint8_t edge_flags,
   out_len = 0;
 
   // left
-  if ((edge_flags & 0x1) != 0) {
-    if (cx > 0) {
-      out_cells[out_len] = base - 1;
-      out_len += 1;
-    }
+  if ((edge_flags & 0x1) && cx > 0) {
+    out_cells[out_len++] = base - 1;
   }
 
   // right
-  if ((edge_flags & 0x2) != 0) {
-    if (cx + 1 < nx) {
-      out_cells[out_len] = base + 1;
-      out_len += 1;
-    }
+  if ((edge_flags & 0x2) && cx + 1 < nx) {
+    out_cells[out_len++] = base + 1;
   }
 
   // bottom
-  if ((edge_flags & 0x4) != 0) {
-    if (cy > 0) {
-      out_cells[out_len] = base - nx;
-      out_len += 1;
-    }
+  if ((edge_flags & 0x4) && cy > 0) {
+    out_cells[out_len++] = base - nx;
   }
 
   // top
-  if ((edge_flags & 0x8) != 0) {
-    if (cy + 1 < ny) {
-      out_cells[out_len] = base + nx;
-      out_len += 1;
-    }
+  if ((edge_flags & 0x8) && cy + 1 < ny) {
+    out_cells[out_len++] = base + nx;
   }
 
   // bottom left
-  if ((edge_flags & 0x5) == 0x5) {
-    if (cx > 0 && cy > 0) {
-      out_cells[out_len++] = base - 1 - nx;
-    }
+  if ((edge_flags & 0x5) == 0x5 && cx > 0 && cy > 0) {
+    out_cells[out_len++] = base - 1 - nx;
   }
 
   // top left
-  if ((edge_flags & 0x9) == 0x9) {
-    if (cx > 0 && cy + 1 < ny) {
-      out_cells[out_len++] = base - 1 + nx;
-    }
+  if ((edge_flags & 0x9) == 0x9 && cx > 0 && cy + 1 < ny) {
+    out_cells[out_len++] = base - 1 + nx;
   }
 
   // bottom right
-  if ((edge_flags & 0x6) == 0x6) {
-    if (cx + 1 < nx && cy > 0) {
-      out_cells[out_len++] = base + 1 - nx;
-    }
+  if ((edge_flags & 0x6) == 0x6 && cx + 1 < nx && cy > 0) {
+    out_cells[out_len++] = base + 1 - nx;
   }
 
   // top right
-  if ((edge_flags & 0xA) == 0xA) {
-    if (cx + 1 < nx && cy + 1 < ny) {
-      out_cells[out_len++] = base + 1 + nx;
-    }
+  if ((edge_flags & 0xA) == 0xA && cx + 1 < nx && cy + 1 < ny) {
+    out_cells[out_len++] = base + 1 + nx;
   }
 }
 
@@ -223,10 +203,10 @@ void build_ghosts(Bins &ghosts_ref, const Bins &locals_ref,
 
   std::fill(ghosts_ref.count_.begin(), ghosts_ref.count_.end(), 0);
 
-  if (ghost_scratch.ghost_flags.size() != (size_t)num_particles) {
+  if (ghost_scratch.ghost_flags.size() != num_particles) {
     ghost_scratch.ghost_flags.resize(num_particles);
   }
-  if (ghost_scratch.ghost_cell.size() != (size_t)num_particles) {
+  if (ghost_scratch.ghost_cell.size() != num_particles) {
     ghost_scratch.ghost_cell.resize(num_particles);
   }
 
@@ -234,15 +214,15 @@ void build_ghosts(Bins &ghosts_ref, const Bins &locals_ref,
   int tmp_len = 0;
 
   for (int i = 0; i < num_particles; ++i) {
-    int home = locals_ref.cell_id_of(particles[i].x, particles[i].y);
+    int home = locals_ref.get_cell_id(particles[i].x, particles[i].y);
     ghost_scratch.ghost_cell[i] = home;
 
     int cx = home % locals_ref.cells_x();
     int cy = home / locals_ref.cells_x();
 
-    double x0 = (double)cx * cell_size;
+    double x0 = cx * cell_size;
     double x1 = x0 + cell_size;
-    double y0 = (double)cy * cell_size;
+    double y0 = cy * cell_size;
     double y1 = y0 + cell_size;
 
     uint8_t edge_flags = 0;
@@ -275,7 +255,7 @@ void build_ghosts(Bins &ghosts_ref, const Bins &locals_ref,
   }
 
   int total_ghosts = ghosts_ref.offset_[total_cells];
-  if (ghosts_ref.data_.size() != (size_t)total_ghosts) {
+  if (ghosts_ref.data_.size() != total_ghosts) {
     ghosts_ref.data_.resize(total_ghosts);
   }
 
@@ -354,3 +334,4 @@ void simulate_one_step(particle_t *particles, int num_particles, double size) {
     move(particles[i], size);
   }
 }
+
